@@ -28,6 +28,11 @@ FRONTMATTER_STATUS_RE = re.compile(r"^status:\s*(.+?)\s*$", re.MULTILINE)
 MAX_OPEN_IN_DIGEST = 6
 MAX_DIFF_IN_DIGEST = 5
 
+# Marcatori di stato usati nelle tabelle/righe dei piani (oltre ai checkbox).
+MARKER_DONE = "✅"
+MARKERS_OPEN = ("⬜", "⚠️")
+_ALL_MARKERS = (MARKER_DONE, *MARKERS_OPEN)
+
 
 @dataclass
 class PlanStat:
@@ -89,6 +94,45 @@ def _parse_checkboxes(text: str) -> tuple[list[str], list[str]]:
     return done, open_
 
 
+def _clean_marker_label(s: str) -> str:
+    for m in _ALL_MARKERS:
+        s = s.replace(m, "")
+    return s.strip().strip("|").lstrip("#-*0123456789. ").strip()
+
+
+def _marker_label(line: str) -> str:
+    s = line.strip()
+    if s.startswith("|"):  # riga di tabella: prendi la prima cella significativa
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        cells = [c for c in cells if c and set(c) - set("-: ")]
+        return _clean_marker_label(cells[0]) if cells else ""
+    return _clean_marker_label(s)
+
+
+def _parse_markers(text: str, already: set[str]) -> tuple[list[str], list[str]]:
+    """Conta i marcatori ✅/⬜/⚠️ (tabelle e righe) come task done/open.
+
+    Serve ai piani che tracciano lo stato in tabella invece che con checkbox.
+    Se una riga ha sia ✅ sia ⬜/⚠️ prevale 'open' (c'è lavoro residuo).
+    """
+    done: list[str] = []
+    open_: list[str] = []
+    seen = set(already)
+    for line in text.splitlines():
+        if CHECKBOX_RE.match(line):
+            continue  # già contato come checkbox
+        has_done = MARKER_DONE in line
+        has_open = any(m in line for m in MARKERS_OPEN)
+        if not (has_done or has_open):
+            continue
+        label = _marker_label(line)
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        (open_ if has_open else done).append(label)
+    return done, open_
+
+
 def _git_last_commit(path: Path) -> str | None:
     try:
         out = subprocess.run(
@@ -129,7 +173,10 @@ def gather() -> list[PlanStat]:
             stats.append(PlanStat(label, str(path), False, None, [], [], None, None, [], []))
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
-        done, open_ = _parse_checkboxes(text)
+        cb_done, cb_open = _parse_checkboxes(text)
+        mk_done, mk_open = _parse_markers(text, set(cb_done) | set(cb_open))
+        done = cb_done + mk_done
+        open_ = cb_open + mk_open
         last = _git_last_commit(path)
         prev_plan = prev.get(label)
         if prev_plan:
