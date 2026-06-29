@@ -1,0 +1,19 @@
+# Registry dei piani di lavoro seguiti dall'orchestratore.
+# `[[plan]]`      = un file singolo.   `[[plan_glob]]` = tutti i file di una cartella.
+# Aggiungere un piano = aggiungere una entry qui.
+
+[[plan]]
+label = "second-brain-prd"
+path  = "/Users/francesco/tech/code/second-brain-demo/.agent/plans/second-brain-prd.md"
+
+[[plan]]
+label = "vision-session"
+path  = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/strategy/vision-session.md"
+
+[[plan]]
+label = "prd-orchestrazione-pratiche-ct"
+path  = "/Users/francesco/tech/code/automazioni-ct/docs/prd-orchestrazione-pratiche-ct.md"
+
+[[plan_glob]]
+dir     = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/projects"
+pattern = "*.md"
