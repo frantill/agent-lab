@@ -52,12 +52,25 @@ agent-lab/
 │   └── models.py           # build_model(): modello via OpenRouter (swap con AGENT_MODEL)
 └── agents/
     ├── _template/          # scaffold clonabile (la "fabbrica")
-    └── hello/              # validazione stack Fase 0
+    ├── hello/              # validazione stack Fase 0
+    └── plan_orchestrator/  # gestore piani: --mode am|pm (review) | update (aggiorna)
 ```
+
+## Gestore piani di lavoro
+
+```bash
+uv run python agents/plan_orchestrator/agent.py --mode update            # aggiorna i piani fermi (interattivo)
+uv run python agents/plan_orchestrator/agent.py --mode update --dry-run  # mostra i diff senza scrivere
+uv run python agents/plan_orchestrator/agent.py --mode am                # review mattutina (read-only)
+uv run python agents/plan_orchestrator/agent.py --mode pm                # review serale
+```
+
+Flusso consigliato: prima `update` (rende i piani veritieri), poi `am`/`pm`
+(review su stato reale). Registry dei piani in `agents/plan_orchestrator/plans.toml`.
 
 ## Roadmap
 
 1. ✅ Fase 0 — setup stack + hello agent (tool-calling check).
-2. ⬜ Fase 1 — scaffold template consolidato.
-3. ⬜ Fase 2 — agente **Orchestratore piani di lavoro** (primo build reale).
-4. ⬜ Fase 3 — estendere a diagrammi di processo / content; estrarre il meta-agente.
+2. ✅ Fase 1 — scaffold template consolidato.
+3. ✅ Fase 2 — gestore piani: orchestratore (am/pm) + plan-updater (update).
+4. ⬜ Fase 3 — schedulazione AM/PM; diagrammi di processo / content; meta-agente.
