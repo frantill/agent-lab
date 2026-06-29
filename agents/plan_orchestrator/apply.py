@@ -104,8 +104,8 @@ def make_diff(old: str, new: str, path: str) -> str:
     diff = difflib.unified_diff(
         old.splitlines(),
         new.splitlines(),
-        fromfile=f"a/{path}",
-        tofile=f"b/{path}",
+        fromfile=f"{path} (prima)",
+        tofile=f"{path} (dopo)",
         lineterm="",
     )
     return "\n".join(diff)
