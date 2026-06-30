@@ -46,6 +46,7 @@ class PlanStat:
     stale_days: int | None
     newly_done: list[str]
     newly_added: list[str]
+    kind: str = "plan"  # "plan" (eseguibile) | "reference" (contesto/strategia)
 
     @property
     def done(self) -> int:
@@ -56,21 +57,28 @@ class PlanStat:
         return len(self.open_tasks)
 
 
-def load_registry() -> list[tuple[str, Path]]:
+def load_registry() -> list[tuple[str, Path, str]]:
+    """Ritorna (label, path, kind). Le entry esplicite `[[plan]]` sono processate
+    prima: una entry esplicita può quindi sovrascrivere il `kind` di un file che
+    rientrerebbe anche in un glob (dedup per path). `[[plan_glob]]` accetta un
+    `kind` di default e un `exclude` (lista di stem da saltare = de-tracking)."""
     data = tomllib.loads(REGISTRY.read_text(encoding="utf-8"))
-    plans: list[tuple[str, Path]] = []
+    plans: list[tuple[str, Path, str]] = []
     seen: set[Path] = set()
     for entry in data.get("plan", []):
         p = Path(entry["path"]).expanduser()
         if p not in seen:
             seen.add(p)
-            plans.append((entry["label"], p))
+            plans.append((entry["label"], p, entry.get("kind", "plan")))
     for g in data.get("plan_glob", []):
         d = Path(g["dir"]).expanduser()
+        kind = g.get("kind", "plan")
+        exclude = set(g.get("exclude", []))
         for fp in sorted(d.glob(g.get("pattern", "*.md"))):
-            if fp not in seen:
-                seen.add(fp)
-                plans.append((fp.stem, fp))
+            if fp in seen or fp.stem in exclude:
+                continue
+            seen.add(fp)
+            plans.append((fp.stem, fp, kind))
     return plans
 
 
@@ -100,32 +108,32 @@ def _clean_marker_label(s: str) -> str:
     return s.strip().strip("|").lstrip("#-*0123456789. ").strip()
 
 
-def _marker_label(line: str) -> str:
-    s = line.strip()
-    if s.startswith("|"):  # riga di tabella: prendi la prima cella significativa
-        cells = [c.strip() for c in s.strip("|").split("|")]
-        cells = [c for c in cells if c and set(c) - set("-: ")]
-        return _clean_marker_label(cells[0]) if cells else ""
-    return _clean_marker_label(s)
+def _marker_label(row: str) -> str:
+    # `row` è una riga di tabella: prendi la prima cella significativa.
+    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+    cells = [c for c in cells if c and set(c) - set("-: ")]
+    return _clean_marker_label(cells[0]) if cells else ""
 
 
 def _parse_markers(text: str, already: set[str]) -> tuple[list[str], list[str]]:
-    """Conta i marcatori ✅/⬜/⚠️ (tabelle e righe) come task done/open.
+    """Conta i marcatori ✅/⬜/⚠️ come task done/open — SOLO nelle righe di tabella.
 
-    Serve ai piani che tracciano lo stato in tabella invece che con checkbox.
-    Se una riga ha sia ✅ sia ⬜/⚠️ prevale 'open' (c'è lavoro residuo).
+    I doc di design/strategia usano ✅/⬜/⚠️ anche nella prosa: contarli ovunque
+    generava task-spazzatura. Ci limitiamo alle righe `|...|`, dove i marcatori
+    rappresentano davvero lo stato. Se una cella ha sia ✅ sia ⬜/⚠️ prevale 'open'.
     """
     done: list[str] = []
     open_: list[str] = []
     seen = set(already)
     for line in text.splitlines():
-        if CHECKBOX_RE.match(line):
-            continue  # già contato come checkbox
-        has_done = MARKER_DONE in line
-        has_open = any(m in line for m in MARKERS_OPEN)
+        s = line.strip()
+        if not s.startswith("|"):
+            continue  # solo righe di tabella
+        has_done = MARKER_DONE in s
+        has_open = any(m in s for m in MARKERS_OPEN)
         if not (has_done or has_open):
             continue
-        label = _marker_label(line)
+        label = _marker_label(s)
         if not label or label in seen:
             continue
         seen.add(label)
@@ -168,9 +176,9 @@ def _load_state() -> dict:
 def gather() -> list[PlanStat]:
     prev = _load_state().get("plans", {})
     stats: list[PlanStat] = []
-    for label, path in load_registry():
+    for label, path, kind in load_registry():
         if not path.exists():
-            stats.append(PlanStat(label, str(path), False, None, [], [], None, None, [], []))
+            stats.append(PlanStat(label, str(path), False, None, [], [], None, None, [], [], kind=kind))
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         cb_done, cb_open = _parse_checkboxes(text)
@@ -190,6 +198,7 @@ def gather() -> list[PlanStat]:
             PlanStat(
                 label, str(path), True, _parse_frontmatter_status(text),
                 done, open_, last, _stale_days(last), newly_done, newly_added,
+                kind=kind,
             )
         )
     return stats
@@ -204,7 +213,8 @@ def build_digest(stats: list[PlanStat]) -> str:
             continue
         fresh = f"fermo da {s.stale_days}g" if s.stale_days is not None else "freschezza n/d"
         st = f"status: {s.status}" if s.status else "status: n/d"
-        lines.append(f"PIANO: {s.label} — {st} — {fresh}")
+        tag = " [RIFERIMENTO]" if s.kind == "reference" else ""
+        lines.append(f"PIANO: {s.label}{tag} — {st} — {fresh}")
         lines.append(f"  task: {s.done} fatti / {s.open} aperti")
         nd = ", ".join(s.newly_done[:MAX_DIFF_IN_DIGEST]) or "—"
         na = ", ".join(s.newly_added[:MAX_DIFF_IN_DIGEST]) or "—"
@@ -219,7 +229,7 @@ def build_digest(stats: list[PlanStat]) -> str:
 
 
 def read_plan_text(label: str) -> str:
-    for lbl, path in load_registry():
+    for lbl, path, _kind in load_registry():
         if lbl == label:
             return path.read_text(encoding="utf-8", errors="replace") if path.exists() else f"(file non trovato: {path})"
     return f"(nessun piano con label '{label}')"
