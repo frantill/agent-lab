@@ -8,10 +8,11 @@ applica in modo chirurgico, così il file non viene mai riscritto/manglato.
 from __future__ import annotations
 
 import difflib
+import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 CHECKBOX_LINE_RE = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s+)(.*\S)\s*$")
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*\S)\s*$")
@@ -27,6 +28,15 @@ class EditOp(BaseModel):
 class PlanEdits(BaseModel):
     summary: str
     edits: list[EditOp]
+
+    @field_validator("edits", mode="before")
+    @classmethod
+    def _coerce_edits(cls, v: object) -> object:
+        # Il modello a volte serializza la lista come stringa JSON ('[]', '[{...}]')
+        # invece che come array: la recuperiamo prima di consumare un retry.
+        if isinstance(v, str):
+            return json.loads(v or "[]")
+        return v
 
 
 def _norm(s: str) -> str:

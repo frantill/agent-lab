@@ -8,10 +8,12 @@ prima `--mode update`, poi `--mode am/pm` ragiona su uno stato reale.
 
 from __future__ import annotations
 
+import readline  # noqa: F401 — abilita line-editing (word-delete) in input()
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 import apply
 import gather
@@ -27,8 +29,8 @@ class PlanQuestions(BaseModel):
     questions: list[str]
 
 
-_q_agent = Agent(build_model(), output_type=PlanQuestions, system_prompt=Q_PROMPT)
-_e_agent = Agent(build_model(), output_type=apply.PlanEdits, system_prompt=E_PROMPT)
+_q_agent = Agent(build_model(), output_type=PlanQuestions, system_prompt=Q_PROMPT, retries=3)
+_e_agent = Agent(build_model(), output_type=apply.PlanEdits, system_prompt=E_PROMPT, retries=3)
 
 
 def _out(result: object):
@@ -66,7 +68,10 @@ def _process_plan(s: gather.PlanStat, dry_run: bool) -> bool:
     for i, q in enumerate(questions, 1):
         print(f"  {i}. {q}")
 
-    ans = input("\nRisposte (testo libero — invio vuoto o 'skip' per saltare): ").strip()
+    ans = input("\nRisposte (testo libero — invio vuoto o 'skip' per saltare): ")
+    # Rimuove i caratteri di controllo (es. escape sequence da Option+Backspace)
+    # che sporcherebbero il prompt passato all'LLM.
+    ans = "".join(ch for ch in ans if ch.isprintable() or ch == " ").strip()
     if ans.lower() in ("", "skip"):
         print("→ saltato.\n")
         return False
@@ -126,6 +131,9 @@ def run_update(all_plans: bool, dry_run: bool) -> None:
         except (KeyboardInterrupt, EOFError):
             print("\n\nInterrotto.")
             break
+        except (UnexpectedModelBehavior, ValidationError) as exc:
+            print(f"\n⚠ piano '{s.label}' saltato — errore del modello: {exc}\n")
+            continue
 
     print("=" * 72)
     print(f"Aggiornati: {', '.join(updated) if updated else 'nessuno'}")
