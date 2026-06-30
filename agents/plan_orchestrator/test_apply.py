@@ -46,12 +46,37 @@ def run() -> None:
     diff = apply.make_diff(SAMPLE, new_text, "demo.md")
     assert diff.strip(), "diff vuoto"
 
+    # add_task: il log mostra il testo del task (value), non l'heading (target)
+    assert "add_task: Aggiungere test" in "\n".join(log), "log add_task mostra il target"
+
+    _test_set_status()
+
     print("log operazioni:")
     for line in log:
         print("  " + line)
     print("\n--- diff ---")
     print(diff)
     print("\nTUTTI I TEST OK ✓")
+
+
+def _test_set_status() -> None:
+    # 1) frontmatter SENZA campo status → lo aggiunge prima della chiusura
+    fm_no_status = "---\ntitle: X\n---\n\n# Corpo\n"
+    out, _ = apply.apply_edits(fm_no_status, [apply.EditOp(op="set_status", value="completato")])
+    assert "status: completato" in out, "set_status non ha aggiunto il campo mancante"
+    assert out.startswith("---\n"), "frontmatter rovinato"
+    assert out.split("\n").index("status: completato") < out.split("\n").index("# Corpo")
+
+    # 2) NESSUN frontmatter → lo crea in cima
+    no_fm = "# Solo corpo\n\ntesto\n"
+    out2, _ = apply.apply_edits(no_fm, [apply.EditOp(op="set_status", value="archived")])
+    lines2 = out2.split("\n")
+    assert lines2[0] == "---" and lines2[1] == "status: archived" and lines2[2] == "---"
+    assert "# Solo corpo" in out2, "corpo perso nella creazione del frontmatter"
+
+    # 3) status già presente → lo riscrive (caso storico)
+    out3, _ = apply.apply_edits(SAMPLE, [apply.EditOp(op="set_status", value="done")])
+    assert "status: done" in out3 and "status: shaping" not in out3
 
 
 if __name__ == "__main__":

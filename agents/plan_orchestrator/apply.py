@@ -79,15 +79,21 @@ def _add_task(lines: list[str], target: str | None, value: str) -> bool:
 
 
 def _set_status(lines: list[str], value: str) -> bool:
-    if not lines or lines[0].strip() != "---":
-        return False
-    for i in range(1, len(lines)):
-        if lines[i].strip() == "---":
-            return False  # fine frontmatter senza status
-        if STATUS_RE.match(lines[i]):
-            lines[i] = f"status: {value}"
-            return True
-    return False
+    new = f"status: {value}"
+    if lines and lines[0].strip() == "---":
+        # Frontmatter presente: riscrivi `status:` se c'è, altrimenti aggiungilo
+        # appena prima della riga `---` di chiusura.
+        for i in range(1, len(lines)):
+            if STATUS_RE.match(lines[i]):
+                lines[i] = new
+                return True
+            if lines[i].strip() == "---":
+                lines.insert(i, new)
+                return True
+        return False  # frontmatter non chiuso (malformato): non toccare
+    # Nessun frontmatter: crealo in cima al file.
+    lines[:0] = ["---", new, "---", ""]
+    return True
 
 
 def apply_edits(text: str, edits: list[EditOp]) -> tuple[str, list[str]]:
@@ -105,7 +111,8 @@ def apply_edits(text: str, edits: list[EditOp]) -> tuple[str, list[str]]:
             ok = _set_status(lines, e.value)
         else:
             ok = False
-        label = e.target or e.value or ""
+        # add_task/set_status sono descritti dal `value`; check/uncheck dal `target`.
+        label = e.value if e.op in ("add_task", "set_status") else (e.target or "")
         log.append(f"{'OK  ' if ok else 'SKIP'} {e.op}: {label}")
     return "\n".join(lines), log
 
