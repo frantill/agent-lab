@@ -100,32 +100,32 @@ def _clean_marker_label(s: str) -> str:
     return s.strip().strip("|").lstrip("#-*0123456789. ").strip()
 
 
-def _marker_label(line: str) -> str:
-    s = line.strip()
-    if s.startswith("|"):  # riga di tabella: prendi la prima cella significativa
-        cells = [c.strip() for c in s.strip("|").split("|")]
-        cells = [c for c in cells if c and set(c) - set("-: ")]
-        return _clean_marker_label(cells[0]) if cells else ""
-    return _clean_marker_label(s)
+def _marker_label(row: str) -> str:
+    # `row` è una riga di tabella: prendi la prima cella significativa.
+    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+    cells = [c for c in cells if c and set(c) - set("-: ")]
+    return _clean_marker_label(cells[0]) if cells else ""
 
 
 def _parse_markers(text: str, already: set[str]) -> tuple[list[str], list[str]]:
-    """Conta i marcatori ✅/⬜/⚠️ (tabelle e righe) come task done/open.
+    """Conta i marcatori ✅/⬜/⚠️ come task done/open — SOLO nelle righe di tabella.
 
-    Serve ai piani che tracciano lo stato in tabella invece che con checkbox.
-    Se una riga ha sia ✅ sia ⬜/⚠️ prevale 'open' (c'è lavoro residuo).
+    I doc di design/strategia usano ✅/⬜/⚠️ anche nella prosa: contarli ovunque
+    generava task-spazzatura. Ci limitiamo alle righe `|...|`, dove i marcatori
+    rappresentano davvero lo stato. Se una cella ha sia ✅ sia ⬜/⚠️ prevale 'open'.
     """
     done: list[str] = []
     open_: list[str] = []
     seen = set(already)
     for line in text.splitlines():
-        if CHECKBOX_RE.match(line):
-            continue  # già contato come checkbox
-        has_done = MARKER_DONE in line
-        has_open = any(m in line for m in MARKERS_OPEN)
+        s = line.strip()
+        if not s.startswith("|"):
+            continue  # solo righe di tabella
+        has_done = MARKER_DONE in s
+        has_open = any(m in s for m in MARKERS_OPEN)
         if not (has_done or has_open):
             continue
-        label = _marker_label(line)
+        label = _marker_label(s)
         if not label or label in seen:
             continue
         seen.add(label)
