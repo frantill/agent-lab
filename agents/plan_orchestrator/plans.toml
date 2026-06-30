@@ -1,19 +1,44 @@
-# Registry dei piani di lavoro seguiti dall'orchestratore.
-# `[[plan]]`      = un file singolo.   `[[plan_glob]]` = tutti i file di una cartella.
-# Aggiungere un piano = aggiungere una entry qui.
+# Registry dei piani seguiti dal gestore (review am/pm + update).
+#
+# [[plan]]       = un file singolo. Campi: label, path, kind (opzionale).
+# [[plan_glob]]  = tutti i file di una cartella. Campi: dir, pattern, kind, exclude.
+#
+# kind:
+#   "plan"      (default) = piano eseguibile: review + update lo gestiscono.
+#   "reference" = doc di strategia/contesto: niente challenge nella review,
+#                 escluso dall'update. Lo curo a mano (chat).
+#
+# Convenzioni:
+#  - Per marcare come reference un file che cadrebbe in un glob, aggiungi una
+#    entry esplicita [[plan]] con kind="reference": le esplicite vincono (dedup per path).
+#  - Per smettere di tracciare ("archiviare") un file globbato: mettilo in `exclude`.
+#  - Per archiviare un file esplicito: rimuovi la sua entry.
 
+# --- Reference (contesto/strategia, curati a mano) ---
 [[plan]]
-label = "second-brain-prd"
-path  = "/Users/francesco/tech/code/second-brain-demo/.agent/plans/second-brain-prd.md"
+label = "agent-factory"
+path  = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/projects/agent-factory.md"
+kind  = "reference"
 
 [[plan]]
 label = "vision-session"
 path  = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/strategy/vision-session.md"
+kind  = "reference"
 
+[[plan]]
+label = "automazioni-ct-direction-session"
+path  = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/projects/automazioni-ct-direction-session.md"
+kind  = "reference"
+
+# --- Piani eseguibili espliciti ---
 [[plan]]
 label = "prd-orchestrazione-pratiche-ct"
 path  = "/Users/francesco/tech/code/automazioni-ct/docs/prd-orchestrazione-pratiche-ct.md"
 
+# --- Piani eseguibili dalla cartella projects (esclusi i morti) ---
+# Archiviati (rimossi dal tracking): second-brain-prd, agents-ai-automation.
 [[plan_glob]]
 dir     = "/Users/francesco/tech/code/second-brain-demo/SecondBrain/Memory/projects"
 pattern = "*.md"
+kind    = "plan"
+exclude = ["agents-ai-automation"]
