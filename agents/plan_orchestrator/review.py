@@ -65,9 +65,12 @@ def build_user_prompt(mode: str, digest: str) -> str:
         f"Data: {today} — modalità: {mode.upper()}.\n{focus}\n\n"
         "Digest deterministico dei piani (conteggi, status, freschezza, diff vs ultima review):\n\n"
         f"{digest}\n\n"
-        "Produci la review. Sii deciso e secco: se un piano è fermo o non più rilevante, "
-        "dillo e raccomanda deprioritize/kill con motivazione. Niente morbidezza. Poche "
-        "next action, concrete."
+        "I piani marcati [RIFERIMENTO] sono documenti di strategia/contesto, NON piani "
+        "eseguibili: usali come contesto ma NON proporre challenge (kill/deprioritize/keep) "
+        "su di essi.\n"
+        "Produci la review. Sui piani veri sii deciso e secco: se uno è fermo o non più "
+        "rilevante, dillo e raccomanda deprioritize/kill con motivazione. Niente morbidezza. "
+        "Poche next action, concrete."
     )
 
 

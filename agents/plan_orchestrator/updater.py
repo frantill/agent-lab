@@ -23,6 +23,8 @@ HERE = Path(__file__).resolve().parent
 Q_PROMPT = (HERE / "prompt_update_q.md").read_text(encoding="utf-8")
 E_PROMPT = (HERE / "prompt_update_e.md").read_text(encoding="utf-8")
 STALE_THRESHOLD = 7  # giorni: oltre questa soglia un piano è "sospetto"
+# Status che indicano un piano concluso/archiviato: l'updater non lo propone più.
+DONE_STATUSES = {"archived", "archiviato", "done", "completato", "completata", "concluso"}
 
 
 class PlanQuestions(BaseModel):
@@ -38,16 +40,25 @@ def _out(result: object):
 
 
 def _select(stats: list[gather.PlanStat], all_plans: bool) -> list[gather.PlanStat]:
-    plans = [s for s in stats if s.exists]
+    # I reference (doc di strategia) e i piani già conclusi/archiviati non si
+    # aggiornano a task: esclusi sempre, anche con --all.
+    plans = [
+        s
+        for s in stats
+        if s.exists
+        and s.kind != "reference"
+        and (s.status or "").strip().lower() not in DONE_STATUSES
+    ]
     if not all_plans:
         plans = [s for s in plans if (s.stale_days or 0) >= STALE_THRESHOLD or s.open > 0]
     return sorted(plans, key=lambda s: (s.stale_days or 0), reverse=True)
 
 
 def _plan_digest(s: gather.PlanStat) -> str:
+    fresh = f"fermo da {s.stale_days}g" if s.stale_days is not None else "freschezza n/d"
     lines = [
         f"Piano: {s.label}",
-        f"status: {s.status or 'n/d'} — fermo da {s.stale_days}g — {s.done} fatti / {s.open} aperti",
+        f"status: {s.status or 'n/d'} — {fresh} — {s.done} fatti / {s.open} aperti",
     ]
     if s.open_tasks:
         lines.append("Task aperti:")
